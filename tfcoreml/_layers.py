@@ -1243,28 +1243,56 @@ def strided_slice(op, context):
   elif np.array_equal(np.squeeze(x),np.squeeze(y)):
     skip(op,context)
   # check for slice along the height and width axis
-  elif len(input_shape) == 4 and \
-        len(begin) == 4 and len(strides) == 4 and len(end) == 4 and \
-          (begin_mask == 9 or (begin[0] == 0 and begin[-1] == 0)):
+  elif (
+    len(input_shape) == 4
+    # `begin`, `end`, `strides` must be of the same length equal to 2, 3, or 4
+    and any(
+      all(len(x) == len_ for x in (begin, end, strides)) for len_ in (2, 3, 4)
+    )
+    and not any((ellipsis_mask, new_axis_mask, shrink_axis_mask))
+  ):
+    slice_axes_names = (None, "height", "width", "channel")
+    slice_kwargs = []
 
-    if end_mask == 15:
-      end[1] = input_shape[1]
-      end[2] = input_shape[2]
+    prev_output_name = None
 
-    if begin[1] != 0 and begin[2] != 0:
-      tmp_output_name = output_name + '_height_sliced'
-      tmp_input_name = tmp_output_name
-    else:
-      tmp_output_name = output_name
-      tmp_input_name = input_name
-    if begin[1] != 0:
-      context.builder.add_slice(
-        tmp_output_name, input_name, tmp_output_name,
-          'height', int(begin[1]), int(end[1]), int(strides[1]))
-    if begin[2] != 0:
-      context.builder.add_slice(
-        output_name, tmp_input_name, output_name,
-          'width', int(begin[2]), int(end[2]), int(strides[2]))
+    for i, (axis, begin_idx, end_idx, stride, dim) in list(
+      enumerate(zip(slice_axes_names, begin, end, strides, input_shape))
+    )[1:]:
+
+     
+      # Calculate the (positive) start and end indices. See
+      # https://www.tensorflow.org/api_docs/python/tf/strided_slice for
+      # information on `begin_mask` and `end_mask`.
+      start_index = 0 if (1 << i) & begin_mask else begin_idx % dim
+      end_index = dim if (1 << i) & end_mask else end_idx % dim
+
+      if start_index == 0 and end_index == dim and stride == 1:
+        # No need to slice
+        continue
+
+      name = "{}_{}".format(output_name, axis)
+
+      slice_kwargs.append(
+        {
+          "name": name,
+          "input_name": prev_output_name,
+          "output_name": name,
+          "axis": axis,
+          "start_index": start_index,
+          "end_index": end_index,
+          "stride": stride,
+        }
+      )
+
+      prev_output_name = name
+
+    slice_kwargs[0]["input_name"] = input_name
+    slice_kwargs[-1]["output_name"] = output_name
+
+    for kwargs in slice_kwargs:
+      context.builder.add_slice(**kwargs)
+
   else:
     assert False, ('Strided Slice case not handled. Input shape = {}, output shape = {}'.format(str(input_shape),str(output_shape)))
   context.translated[output_name] = True
