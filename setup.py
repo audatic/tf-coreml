@@ -34,9 +34,12 @@ setup(
         'numpy >= 1.6.2',
         'protobuf >= 3.1.0',
         'six >= 1.10.0',
-        'tensorflow >= 1.5.0',
         'coremltools >= 0.8'
     ],
+    extras_require={
+      'tf': ['tensorflow>=1.5.0'],
+      'tf_gpu': ['tensorflow-gpu>=1.5.0'],
+    },
     # If there are data files included in your packages that need to be
     # installed, specify them here.  If using Python 2.6 or less, then these
     # have to be included in MANIFEST.in as well.
