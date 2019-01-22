@@ -372,7 +372,7 @@ def _fuse_pad_conv(nn_layers):
       next_layer_id = blob_dst[out][0]
       next_layer = nn_layers[next_layer_id]
       if next_layer.WhichOneof('layer') == 'convolution' and \
-         layer.convolution.isDeconvolution == False and \
+         next_layer.convolution.isDeconvolution == False and \
          next_layer.convolution.HasField("valid"):
         ph, pw = _get_padding_values(
           next_layer.convolution.valid.paddingAmounts.borderAmounts)
